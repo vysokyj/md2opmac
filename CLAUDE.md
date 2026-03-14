@@ -268,7 +268,7 @@ Pokud soubor nelze přečíst, konvertor skončí s chybou (ne tichým fallbacke
 ### Missing / not yet implemented
 
 #### High priority
-- [ ] **Integration tests** — `tests/` directory is empty; add end-to-end MD→TeX snapshot tests
+- [x] **Integration tests** — `tests/render.rs` covers headings, inline formatting, code blocks, lists, tables, escaping, all typo transformations
 - [ ] **Style system** — `[styl]` in metadata.toml is parsed but ignored; implement lookup chain:
   1. `./styles/<name>.tex` (relative to metadata.toml)
   2. `~/.config/md2optex/styles/<name>.tex`

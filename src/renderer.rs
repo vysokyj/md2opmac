@@ -11,24 +11,27 @@ pub fn render(
     dpi: u32,
 ) -> Result<String, Error> {
     let mut out = String::new();
-
-    // Preamble
     out.push_str(&build_preamble(metadata, hyphenation)?);
+    out.push_str(&render_body(markdown, dpi));
+    out.push_str("\n\\bye\n");
+    Ok(out)
+}
 
-    // Document body
+/// Renders only the document body (no preamble, no `\bye`).
+/// Used by integration tests to check markup in isolation.
+pub fn render_body(markdown: &str, dpi: u32) -> String {
     let opts = Options::ENABLE_TABLES
         | Options::ENABLE_STRIKETHROUGH
         | Options::ENABLE_TASKLISTS;
 
     let parser = Parser::new_ext(markdown, opts);
     let mut ctx = Context::new(dpi);
+    let mut out = String::new();
 
     for event in parser {
         ctx.handle_event(event, &mut out);
     }
-
-    out.push_str("\n\\bye\n");
-    Ok(out)
+    out
 }
 
 fn build_preamble(metadata: Option<&Metadata>, hyphenation: &[String]) -> Result<String, Error> {
