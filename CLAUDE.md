@@ -135,7 +135,7 @@ Doporučená adresářová struktura pro knihu:
 ```
 kniha/
   metadata.toml        # metadata a nastavení sazby
-  kapitoly/
+  chapters/
     00_uvod.md
     01_prvni_kapitola.md
     02_druha_kapitola.md

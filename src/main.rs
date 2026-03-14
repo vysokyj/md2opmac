@@ -78,10 +78,13 @@ fn load_input(args: &Args) -> Result<(String, Option<Metadata>), Error> {
 }
 
 fn load_chapters(dir: &PathBuf) -> Result<String, Error> {
-    let chapters_dir = dir.join("kapitoly");
-    if !chapters_dir.exists() {
-        return Err(Error::MissingChaptersDir(chapters_dir));
-    }
+    // Accept both "chapters" (preferred) and "kapitoly" (legacy Czech name)
+    let chapters_dir = ["chapters", "kapitoly"]
+        .iter()
+        .map(|name| dir.join(name))
+        .find(|p| p.exists())
+        .ok_or_else(|| Error::MissingChaptersDir(dir.join("chapters")))?;
+
 
     let mut files: Vec<PathBuf> = fs::read_dir(&chapters_dir)?
         .filter_map(|e| e.ok())

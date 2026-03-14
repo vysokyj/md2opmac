@@ -118,7 +118,7 @@ Místo jednoho souboru lze předat celý adresář:
 ```
 kniha/
   metadata.toml
-  kapitoly/
+  chapters/
     00_uvod.md
     01_prvni_kapitola.md
     02_druha_kapitola.md
