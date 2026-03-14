@@ -1,0 +1,123 @@
+mod error;
+mod metadata;
+mod renderer;
+mod typo;
+
+use std::fs;
+use std::io::{self, Read, Write};
+use std::path::PathBuf;
+
+use clap::Parser;
+
+use error::Error;
+use metadata::Metadata;
+
+#[derive(Parser)]
+#[command(version, about = "Převodník Markdown → OPmac TeX")]
+struct Args {
+    /// Vstupní Markdown soubor nebo adresář s knihou (výchozí: stdin)
+    input: Option<PathBuf>,
+
+    /// Výstupní TeX soubor (výchozí: stdout)
+    #[arg(short, long)]
+    output: Option<PathBuf>,
+
+    /// Slovník dělení slov (každý řádek: slo-vo)
+    #[arg(long)]
+    hyphenation_dict: Option<PathBuf>,
+
+    /// Rozlišení obrázků v DPI pro výpočet fyzické velikosti
+    #[arg(long, default_value_t = 96)]
+    dpi: u32,
+}
+
+fn main() {
+    if let Err(e) = run() {
+        eprintln!("Chyba: {e}");
+        std::process::exit(1);
+    }
+}
+
+fn run() -> Result<(), Error> {
+    let args = Args::parse();
+
+    let (markdown, metadata) = load_input(&args)?;
+    let hyphenation_dict = load_hyphenation(&args, metadata.as_ref())?;
+    let tex = renderer::render(&markdown, metadata.as_ref(), &hyphenation_dict, args.dpi)?;
+
+    match &args.output {
+        Some(path) => fs::write(path, tex)?,
+        None => io::stdout().write_all(tex.as_bytes())?,
+    }
+
+    Ok(())
+}
+
+fn load_input(args: &Args) -> Result<(String, Option<Metadata>), Error> {
+    match &args.input {
+        None => {
+            let mut buf = String::new();
+            io::stdin().read_to_string(&mut buf)?;
+            Ok((buf, None))
+        }
+        Some(path) if path.is_dir() => {
+            let meta_path = path.join("metadata.toml");
+            let metadata = if meta_path.exists() {
+                Some(Metadata::load(&meta_path)?)
+            } else {
+                None
+            };
+            let markdown = load_chapters(path)?;
+            Ok((markdown, metadata))
+        }
+        Some(path) => {
+            let markdown = fs::read_to_string(path)?;
+            Ok((markdown, None))
+        }
+    }
+}
+
+fn load_chapters(dir: &PathBuf) -> Result<String, Error> {
+    let kapitoly = dir.join("kapitoly");
+    if !kapitoly.exists() {
+        return Err(Error::MissingChaptersDir(kapitoly));
+    }
+
+    let mut files: Vec<PathBuf> = fs::read_dir(&kapitoly)?
+        .filter_map(|e| e.ok())
+        .map(|e| e.path())
+        .filter(|p| p.extension().map_or(false, |e| e == "md"))
+        .collect();
+
+    files.sort();
+
+    let mut out = String::new();
+    for f in files {
+        out.push_str(&fs::read_to_string(&f)?);
+        out.push('\n');
+    }
+    Ok(out)
+}
+
+fn load_hyphenation(args: &Args, metadata: Option<&Metadata>) -> Result<Vec<String>, Error> {
+    let path = args
+        .hyphenation_dict
+        .clone()
+        .or_else(|| metadata.and_then(|m| m.cesty.as_ref()?.hyphenation.clone()));
+
+    let Some(path) = path else {
+        return Ok(vec![]);
+    };
+
+    let content = fs::read_to_string(&path)
+        .map_err(|e| Error::HyphenationDict(path.clone(), e))?;
+
+    let words = content
+        .lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty() && !l.starts_with('#'))
+        .map(str::to_owned)
+        .collect();
+
+    Ok(words)
+}
