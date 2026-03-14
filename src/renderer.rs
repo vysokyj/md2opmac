@@ -90,7 +90,7 @@ fn build_preamble(
             let top = ts.margin_top.unwrap_or(30);
             let bottom = ts.margin_bottom.unwrap_or(30);
             s.push_str(&format!(
-                "\\margins/1 {paper} ({left}mm,{right}mm,{top}mm,{bottom}mm)\n"
+                "\\margins/1 {paper} ({left},{right},{top},{bottom})mm\n"
             ));
         }
     }
