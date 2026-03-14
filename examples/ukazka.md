@@ -98,10 +98,8 @@ Ukázka GFM tabulky se zarovnáním sloupců:
 
 ## Obrázek
 
-Pokud obrázek existuje, změří se a vloží automaticky:
+Obrázek se automaticky změří a vloží do sazby:
 
-```
-![Popisek](cesta/k/obrazku.png)
-```
+![Ukázkový obrázek](example.png)
 
 Pokud soubor neexistuje, vypíše se varování na stderr a použije se `\picw=\hsize`.

@@ -11,7 +11,7 @@ fn normalise(s: &str) -> String {
 }
 
 fn body(md: &str) -> String {
-    normalise(&render_body(md, 96))
+    normalise(&render_body(md, 96, None))
 }
 
 // ── Headings ────────────────────────────────────────────────────────────────
@@ -128,6 +128,24 @@ fn link() {
     assert!(out.contains("\\ulink[https://example.com]{click}"));
 }
 
+// ── Images ───────────────────────────────────────────────────────────────────
+
+#[test]
+fn image_with_base_dir_uses_absolute_path() {
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("examples");
+    let out = md2optex::renderer::render_body("![alt](example.png)", 96, Some(&dir));
+    // Path should be absolute (starts with /)
+    assert!(out.contains("/examples/example.png"), "expected absolute path in: {out}");
+    // Image is 1024px wide → > 15 cm at 96 DPI → \hsize
+    assert!(out.contains("\\picw=\\hsize"), "expected \\hsize for wide image in: {out}");
+}
+
+#[test]
+fn image_without_base_dir_keeps_path() {
+    let out = md2optex::renderer::render_body("![alt](img/photo.png)", 96, None);
+    assert!(out.contains("\\inspic img/photo.png"), "expected original path in: {out}");
+}
+
 // ── Tables ───────────────────────────────────────────────────────────────────
 
 #[test]
@@ -140,14 +158,14 @@ fn table_alignment_spec() {
 #[test]
 fn table_header_ends_with_crli() {
     let md = "| A | B |\n|---|---|\n| x | y |";
-    let out = render_body(md, 96);
+    let out = render_body(md, 96, None);
     assert!(out.contains("\\crli"));
 }
 
 #[test]
 fn table_data_row_ends_with_cr() {
     let md = "| A |\n|---|\n| x |";
-    let out = render_body(md, 96);
+    let out = render_body(md, 96, None);
     // data row ends with \cr (not \crli)
     assert!(out.contains("x \\cr"));
 }

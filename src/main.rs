@@ -48,12 +48,17 @@ fn run() -> Result<(), Error> {
 
     let (markdown, metadata) = load_input(&args)?;
     let hyphenation = load_hyphenation(&args, metadata.as_ref())?;
+    let base_dir: Option<std::path::PathBuf> = args.input.as_ref().and_then(|p| {
+        let dir = if p.is_dir() { p.as_path() } else { p.parent()? };
+        fs::canonicalize(dir).ok()
+    });
     let tex = renderer::render(
         &markdown,
         metadata.as_ref(),
         &hyphenation,
         args.dpi,
         args.style.as_deref(),
+        base_dir.as_deref(),
     )?;
 
     match &args.output {

@@ -1,3 +1,5 @@
+use std::path::{Path, PathBuf};
+
 use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd, HeadingLevel, Alignment};
 
 use crate::error::Error;
@@ -11,23 +13,24 @@ pub fn render(
     hyphenation: &[String],
     dpi: u32,
     style: Option<&str>,
+    base_dir: Option<&Path>,
 ) -> Result<String, Error> {
     let mut out = String::new();
     out.push_str(&build_preamble(metadata, hyphenation, style)?);
-    out.push_str(&render_body(markdown, dpi));
+    out.push_str(&render_body(markdown, dpi, base_dir));
     out.push_str("\n\\bye\n");
     Ok(out)
 }
 
 /// Renders only the document body (no preamble, no `\bye`).
 /// Used by integration tests to check markup in isolation.
-pub fn render_body(markdown: &str, dpi: u32) -> String {
+pub fn render_body(markdown: &str, dpi: u32, base_dir: Option<&Path>) -> String {
     let opts = Options::ENABLE_TABLES
         | Options::ENABLE_STRIKETHROUGH
         | Options::ENABLE_TASKLISTS;
 
     let parser = Parser::new_ext(markdown, opts);
-    let mut ctx = Context::new(dpi);
+    let mut ctx = Context::new(dpi, base_dir);
     let mut out = String::new();
 
     for event in parser {
@@ -146,6 +149,7 @@ fn tex_escape(s: &str) -> String {
 
 struct Context {
     dpi: u32,
+    base_dir: Option<PathBuf>,
     list_depth: u32,
     in_code_block: bool,
     in_image: bool,
@@ -156,9 +160,10 @@ struct Context {
 }
 
 impl Context {
-    fn new(dpi: u32) -> Self {
+    fn new(dpi: u32, base_dir: Option<&Path>) -> Self {
         Self {
             dpi,
+            base_dir: base_dir.map(|p| p.to_path_buf()),
             list_depth: 0,
             in_code_block: false,
             in_image: false,
@@ -167,6 +172,21 @@ impl Context {
             col_index: 0,
             row_count: 0,
         }
+    }
+
+    /// Resolves an image path relative to `base_dir`.
+    /// Returns an absolute path when possible, otherwise the path as-is.
+    fn resolve_image_path(&self, path: &str) -> PathBuf {
+        let p = Path::new(path);
+        if p.is_absolute() {
+            return p.to_path_buf();
+        }
+        if let Some(base) = &self.base_dir {
+            let joined = base.join(p);
+            // Canonicalize to get a clean absolute path; fall back to joined if it fails.
+            return std::fs::canonicalize(&joined).unwrap_or(joined);
+        }
+        p.to_path_buf()
     }
 
     fn handle_event(&mut self, event: Event, out: &mut String) {
@@ -223,8 +243,9 @@ impl Context {
             }
             Tag::Image { dest_url, .. } => {
                 self.in_image = true;
-                let width = measure_image(&dest_url, self.dpi);
-                out.push_str(&format!("\\picw={width} \\inspic {dest_url}\n"));
+                let resolved = self.resolve_image_path(&dest_url);
+                let width = measure_image(&resolved, self.dpi);
+                out.push_str(&format!("\\picw={width} \\inspic {}\n", resolved.display()));
             }
             Tag::Table(alignments) => {
                 self.col_alignments = alignments;
@@ -305,7 +326,7 @@ fn alignment_char(a: &Alignment) -> char {
     }
 }
 
-fn measure_image(path: &str, dpi: u32) -> String {
+fn measure_image(path: &Path, dpi: u32) -> String {
     match imagesize::size(path) {
         Ok(dim) => {
             let width_cm = dim.width as f64 / dpi as f64 * 2.54;
@@ -316,7 +337,7 @@ fn measure_image(path: &str, dpi: u32) -> String {
             }
         }
         Err(_) => {
-            eprintln!("Warning: cannot measure image '{path}', using \\hsize");
+            eprintln!("Warning: cannot measure image '{}', using \\hsize", path.display());
             "\\hsize".to_owned()
         }
     }
