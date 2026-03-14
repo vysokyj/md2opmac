@@ -19,13 +19,13 @@ sudo pacman -S texlive-basic texlive-luatex texlive-langczechslovak
 ```bash
 git clone https://github.com/vas-login/md2optex
 cd md2optex
-make install          # zkompiluje release build a zkopíruje do /usr/local/bin
+make install          # cargo install --path . → ~/.cargo/bin/md2optex
 ```
 
-Vlastní cílový adresář:
+Nebo přímo přes Cargo:
 
 ```bash
-make install DESTDIR=~/.local/bin
+cargo install --path .
 ```
 
 ## Použití

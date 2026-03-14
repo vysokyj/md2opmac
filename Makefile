@@ -1,9 +1,8 @@
 BINARY   = md2optex
-DESTDIR  ?= /usr/local/bin
 EXAMPLE  ?= examples/ukazka.md
 BUILDDIR  = build
 
-.PHONY: all build release test check fmt lint install uninstall clean preview pdf tex
+.PHONY: all build release install uninstall test check fmt lint clean tex pdf preview
 
 all: build
 
@@ -12,6 +11,12 @@ build:
 
 release:
 	cargo build --release
+
+install:
+	cargo install --path .
+
+uninstall:
+	cargo uninstall $(BINARY)
 
 test:
 	cargo test
@@ -23,12 +28,6 @@ fmt:
 
 lint:
 	cargo clippy -- -D warnings
-
-install: release
-	install -Dm755 target/release/$(BINARY) $(DESTDIR)/$(BINARY)
-
-uninstall:
-	rm -f $(DESTDIR)/$(BINARY)
 
 # Generate TeX from the example Markdown file into build/
 tex:
