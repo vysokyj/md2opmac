@@ -117,7 +117,7 @@ fn build_preamble(
     s.push_str("\\def\\endcitation{\\par\\leftskip=0em\\rightskip=0em\\medskip}\n");
     // \maketitle is not built into OpTeX; define it here.
     // vertical fill, title (via \tit), author in italics, vertical fill, page break.
-    s.push_str("\\def\\maketitle{\\vglue0pt plus1fill\\tit \\thetitle\\par\\medskip\\noindent{\\it\\theauthor}\\par\\vglue0pt plus2fill\\eject}\n");
+    s.push_str("\\def\\maketitle{\\bgroup\\footline={}\\headline={}\\vglue0pt plus1fill{\\typosize[18/22]\\bf\\noindent\\thetitle\\par}\\medskip\\noindent{\\it\\theauthor}\\par\\vglue0pt plus2fill\\eject\\egroup}\n");
     // \strike is not built into OpTeX; draw a mid-height rule over the text.
     s.push_str("\\def\\strike#1{\\leavevmode\\setbox0=\\hbox{#1}\\hbox{\\copy0\\kern-\\wd0\\vrule height0.55em depth-0.45em width\\wd0}}\n");
 
