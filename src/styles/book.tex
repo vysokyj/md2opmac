@@ -1,28 +1,48 @@
 % book — fiction / prose book
-% Pagella (Palatino-like), B5, symmetric two-sided margins, folio centred in footer.
+% Pagella (Palatino-like), B5, symmetric two-sided margins, folio in header.
 \fontfam[Pagella]
 \typosize[11/13.5]
 \margins/2 b5 (25,20,25,25)mm
 
-% No page numbers in header, folio centred in footer
-\headline={}
-\footline={\hss\folio\hss}
+% Czech typographic text composition
+\widowpenalty=10000  \clubpenalty=10000
+\frenchspacing
+\emergencystretch=3em
 
-% Chapter: page break, centred title, no "Chapter N" prefix.
-% \_printrefnum[@] has no visible output when \nonum is active, but
-% it still writes the TOC entry and hyperlink anchor to the .ref file.
-\_def\_printchap #1{\_vfill\_supereject \_prevdepth=0pt
+% Running headers: even pages — folio + book title; odd pages — chapter title + folio.
+% Footer empty (folio moved to header). Front-matter pages override locally via \bgroup.
+\headline={\ifodd\pageno
+  {\it\botmark}\hfil\folio
+\else
+  \folio\hfil{\it\thetitle}%
+\fi}
+\footline={}
+
+% Chapter: openright (ensure odd page), centred title, thin-rule ornament, no chapter number.
+% \_printrefnum[@] is invisible when \nonum is active but still writes the TOC entry
+% and hyperlink anchor to the .ref file.
+\_def\_printchap #1{\_vfill\_supereject
+   % openright: insert blank recto page if the chapter would land on an even page
+   \_ifodd\_pageno \_else
+      \bgroup\footline={}\headline={}\null\vfil\_supereject\egroup
+   \_fi
+   \_prevdepth=0pt
    \_vglue3\_bigskipamount
    {\_chapfont \_leftskip=0pt plus1fill \_rightskip=\_leftskip
-    \_noindent \_printrefnum[@]#1\_nbpar}\_mark{}%
+    \_noindent \_printrefnum[@]#1\_nbpar}%
+   \_nobreak
+   \vskip4pt
+   {\noindent\hfil\vrule height0.4pt depth0pt width3em\hfil\par}%
+   \_mark{#1}%
    \_nobreak \_belowtitle{\_bigskip}%
    \_firstnoindent
 }
 
-% Section: no number, left-aligned bold
+% Section: no number, left-aligned bold.
+% \_insertmark omitted so the running header keeps the chapter title, not section title.
 \_def\_printsec#1{\_par
    \_abovetitle{\_penalty-151}\_bigskip
-   {\_secfont \_noindent \_raggedright \_printrefnum[@\_quad]#1\_nbpar}\_insertmark{#1}%
+   {\_secfont \_noindent \_raggedright \_printrefnum[@\_quad]#1\_nbpar}%
    \_nobreak \_belowtitle{\_medskip}%
    \_firstnoindent
 }

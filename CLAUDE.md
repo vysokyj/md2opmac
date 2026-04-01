@@ -288,22 +288,17 @@ Pokud soubor nelze přečíst, konvertor skončí s chybou (ne tichým fallbacke
 
 #### Style `book` — typographic conventions not yet implemented
 
-**Text composition:**
-- [ ] **`\widowpenalty=10000 \clubpenalty=10000`** — prevent widows/orphans (orphaned lines)
-- [ ] **`\frenchspacing`** — equal spacing after periods (Czech standard, no double space after sentence)
-- [ ] **`\emergencystretch`** — looser line breaking to avoid overfull boxes in narrow columns
-
-**Chapter layout:**
-- [ ] **`\openright`** — every chapter starts on a recto (odd/right) page; blank verso inserted if needed
-- [ ] **Ornament under chapter title** — decorative separator below chapter heading
-
-**Running headers (živá záhlaví):**
-- [ ] **Left page: book title, right page: chapter title** — classic two-sided book convention
-  - OpTeX: `\headline={\ifodd\pageno {\it\the\marks0}\hfil\folio \else \folio\hfil{\it\thetitle}\fi}`
-  - Requires `\mark` to be set per chapter (OpTeX does this via `\_printchap`)
-
 **Back matter:**
 - [ ] **Colofon at end of book** — tiráž (ISBN, printer, year) as alternative to verso title page
+
+#### Style `book` — implemented ✓
+
+- [x] `\widowpenalty=10000 \clubpenalty=10000` — prevent widows/orphans
+- [x] `\frenchspacing` — equal spacing after periods (Czech standard)
+- [x] `\emergencystretch=3em` — looser line breaking
+- [x] `\openright` — every chapter starts on a recto (odd) page; blank verso inserted via `\bgroup\footline={}\headline={}\null\vfil\_supereject\egroup`
+- [x] Ornament under chapter title — thin centred rule (`\vrule height0.4pt width3em`)
+- [x] Running headers — even: `\folio + book title`; odd: `chapter title + \folio`; chapter title stored via `\_mark{#1}` in `\_printchap`, folio moved from footer to header
 
 ## Workflow
 
