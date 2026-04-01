@@ -271,3 +271,10 @@ fn footnote_reference_replaced() {
     assert!(out.contains(r"\fnote{Explanation here.}"));
     assert!(!out.contains("note]"));
 }
+
+// ── Strikethrough ─────────────────────────────────────────────────────────────
+
+#[test]
+fn strikethrough() {
+    assert!(body("~~přeškrtnutý~~").contains(r"\strike{přeškrtnutý}"));
+}

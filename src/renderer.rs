@@ -86,6 +86,22 @@ fn collect_footnotes(markdown: &str, opts: Options) -> HashMap<String, String> {
     map
 }
 
+/// Converts a header/footer template string (`left & center & right`) into
+/// an OpTeX `\headline`/`\footline` body.
+/// Recognises `{author}`, `{title}`, `{folio}` placeholders.
+fn running_line(template: &str) -> String {
+    let parts: Vec<&str> = template.splitn(3, '&').collect();
+    let left   = parts.first().map(|s| s.trim()).unwrap_or("");
+    let center = parts.get(1).map(|s| s.trim()).unwrap_or("");
+    let right  = parts.get(2).map(|s| s.trim()).unwrap_or("");
+    let subst = |s: &str| {
+        s.replace("{author}", "\\theauthor")
+         .replace("{title}",  "\\thetitle")
+         .replace("{folio}",  "\\folio")
+    };
+    format!("{}\\hfil {}\\hfil {}", subst(left), subst(center), subst(right))
+}
+
 fn build_preamble(
     metadata: Option<&Metadata>,
     hyphenation: &[String],
@@ -102,6 +118,8 @@ fn build_preamble(
     // \author and \maketitle are not built into OpTeX; define minimal versions.
     s.push_str("\\def\\author#1{\\gdef\\theauthor{#1}}\n");
     s.push_str("\\def\\maketitle{\\vskip\\medskipamount{\\it\\noindent\\theauthor\\par}\\bigskip}\n");
+    // \strike is not built into OpTeX; draw a mid-height rule over the text.
+    s.push_str("\\def\\strike#1{\\leavevmode\\setbox0=\\hbox{#1}\\hbox{\\copy0\\kern-\\wd0\\vrule height0.55em depth-0.45em width\\wd0}}\n");
 
     // Resolve and inject style: CLI --style takes priority over metadata [styl].
     let style_name = style.or_else(|| {
@@ -146,6 +164,15 @@ fn build_preamble(
                 "\\margins/1 {paper} ({left},{right},{top},{bottom})mm\n"
             ));
         }
+        if let Some(header) = &ts.header {
+            s.push_str(&format!("\\headline={{{}}}\n", running_line(header)));
+        }
+        if let Some(footer) = &ts.footer {
+            s.push_str(&format!("\\footline={{{}}}\n", running_line(footer)));
+        }
+        if ts.paragraph.as_deref() == Some("noindent") {
+            s.push_str("\\parindent=0pt\n");
+        }
     }
 
     if !hyphenation.is_empty() {
@@ -162,6 +189,7 @@ fn build_preamble(
         && let Some(book) = &meta.book
     {
         if let Some(title) = &book.title {
+            s.push_str(&format!("\\gdef\\thetitle{{{title}}}\n"));
             s.push_str(&format!("\\tit {title}\n"));
         }
         if let Some(author) = &book.author {
@@ -293,6 +321,7 @@ impl Context {
             Tag::Paragraph => {}
             Tag::Strong => out.push_str("{\\bf "),
             Tag::Emphasis => out.push_str("{\\it "),
+            Tag::Strikethrough => out.push_str("\\strike{"),
             Tag::CodeBlock(_) => {
                 self.in_code_block = true;
                 out.push_str("\\begtt\n");
@@ -347,7 +376,7 @@ impl Context {
         match tag {
             TagEnd::Heading(_) => out.push('\n'),
             TagEnd::Paragraph => out.push_str("\n\n"),
-            TagEnd::Strong | TagEnd::Emphasis => out.push('}'),
+            TagEnd::Strong | TagEnd::Emphasis | TagEnd::Strikethrough => out.push('}'),
             TagEnd::CodeBlock => {
                 self.in_code_block = false;
                 out.push_str("\\endtt\n\n");
