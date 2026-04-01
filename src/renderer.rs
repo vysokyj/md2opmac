@@ -193,7 +193,7 @@ fn build_preamble(
             s.push_str(&format!("\\gdef\\thetitle{{{title}}}\n"));
         }
         if let Some(author) = &book.author {
-            s.push_str(&format!("\\author {author}\n"));
+            s.push_str(&format!("\\author{{{author}}}\n"));
         }
         if book.title.is_some() || book.author.is_some() {
             s.push_str("\\maketitle\n");
