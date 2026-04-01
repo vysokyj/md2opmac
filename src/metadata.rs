@@ -23,6 +23,7 @@ pub struct Book {
     pub year: Option<u32>,
     pub isbn: Option<String>,
     pub toc: Option<bool>,
+    pub copyright: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]

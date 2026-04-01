@@ -196,9 +196,33 @@ fn build_preamble(
         }
         if book.title.is_some() || book.author.is_some() {
             s.push_str("\\maketitle\n");
+            // Verso of title page: copyright info at bottom, or blank page.
+            let has_colophon = book.copyright.is_some()
+                || book.year.is_some()
+                || book.isbn.is_some();
+            if has_colophon {
+                s.push_str("\\null\\vfil\n");
+                if let Some(cr) = &book.copyright {
+                    s.push_str(&format!("\\noindent {cr}\\par\n"));
+                } else if let (Some(year), Some(author)) = (&book.year, &book.author) {
+                    s.push_str(&format!("\\noindent \\char169 \\ {year} {author}\\par\n"));
+                }
+                if let Some(isbn) = &book.isbn {
+                    s.push_str(&format!("\\noindent ISBN: {isbn}\\par\n"));
+                }
+                s.push_str("\\vfil\\eject\n");
+            } else {
+                s.push_str("\\null\\vfil\\eject\n");
+            }
         }
         if book.toc == Some(true) {
-            s.push_str("\\vfil\\supereject\\centerline{\\typosize[14/17]\\bf Obsah}\\bigskip\n\\maketoc\n");
+            // Ensure TOC starts on an odd (recto) page.
+            s.push_str("\\ifodd\\pageno\\else\\null\\vfil\\eject\\fi\n");
+            // TOC page without running header/footer.
+            s.push_str("\\bgroup\\footline={}\\headline={}\n");
+            s.push_str("\\centerline{\\typosize[14/17]\\bf Obsah}\\bigskip\n");
+            s.push_str("\\maketoc\n");
+            s.push_str("\\egroup\n");
         }
     }
 
