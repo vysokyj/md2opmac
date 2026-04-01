@@ -190,7 +190,12 @@ name = "book"   # minimal | book | academic | manual, nebo cesta k .tex souboru
 
 ### Kolofon / rubová strana titulu
 
-Pokud jsou v `[book]` vyplněna pole `year`, `author` nebo `isbn`, vygeneruje se automaticky rubová strana titulní strany s údaji o copyrightu a ISBN. Pole `copyright` přepíše automaticky generovaný řádek `© rok autor`.
+Pokud jsou v `[book]` vyplněna pole `year`, `author` nebo `isbn`:
+
+- **Ostatní styly**: údaje (copyright, ISBN) se vypisují na rubové straně titulu (str. 2).
+- **Styl `book`**: rubová strana zůstane prázdná a kolofon (tiráž) se vygeneruje na **konci knihy** — za obsahem a TOC, jako poslední strana před `\bye`. Tiráž obsahuje název, autora, copyright a ISBN.
+
+Pole `copyright` přepíše automaticky generovaný řádek `© rok autor`.
 
 ## Sazební styly
 
@@ -222,7 +227,7 @@ Pokud jsou v `[book]` vyplněna pole `title` a/nebo `author`, vygeneruje se auto
 - Vycentrovaný název v 18pt tučném písmu
 - Jméno autora v kurzívě
 - Bez čísla stránky
-- Rubová strana (str. 2): copyright + ISBN (nebo prázdná), bez čísla stránky
+- Rubová strana (str. 2): copyright + ISBN (nebo prázdná pro styl `book`), bez čísla stránky
 - Obsah (pokud `toc` není `false`): garantovaně lichá strana, bez záhlaví/zápatí
 - Číslování stránek se resetuje na 1 na začátku těla dokumentu
 

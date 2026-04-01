@@ -69,8 +69,10 @@ pub fn render(
         .and_then(|t| t.toc_depth)
         .unwrap_or(if nonum { 1 } else { u32::MAX });
 
+    let is_book = style_name == Some("book");
+
     let mut out = String::new();
-    out.push_str(&build_preamble(metadata, hyphenation, style, toc_placement)?);
+    out.push_str(&build_preamble(metadata, hyphenation, style, toc_placement, is_book)?);
     let images_dir = metadata
         .and_then(|m| m.paths.as_ref())
         .and_then(|p| p.images.as_deref())
@@ -78,6 +80,11 @@ pub fn render(
     out.push_str(&render_body_impl(markdown, dpi, base_dir, images_dir.as_deref(), nonum, toc_depth));
     if toc_placement == Some(TocPlacement::Back) {
         out.push_str(&toc_block(TocPlacement::Back));
+    }
+    if is_book {
+        if let Some(meta) = metadata {
+            out.push_str(&back_colophon_block(meta));
+        }
     }
     out.push_str("\n\\bye\n");
     Ok(out)
@@ -166,11 +173,56 @@ fn running_line(template: &str) -> String {
     format!("{}\\hfil {}\\hfil {}", subst(left), subst(center), subst(right))
 }
 
+/// Generates the back colophon (tiráž) for book style — placed at the very end
+/// of the document, before `\bye`. The content is pushed to the bottom of the page.
+/// Only emitted when at least one of copyright/year/isbn is present in metadata.
+fn back_colophon_block(metadata: &Metadata) -> String {
+    let book = match &metadata.book {
+        Some(b) => b,
+        None => return String::new(),
+    };
+    let has_content = book.copyright.is_some() || book.year.is_some() || book.isbn.is_some();
+    if !has_content {
+        return String::new();
+    }
+
+    let mut s = String::new();
+    s.push_str("\n\\vfil\\supereject\n");
+    s.push_str("\\bgroup\\footline={}\\headline={}\n");
+    s.push_str("\\null\\vfil\n");
+
+    if book.title.is_some() || book.author.is_some() {
+        if book.title.is_some() {
+            s.push_str("\\noindent {\\bf\\thetitle}\\par\n");
+        }
+        if book.author.is_some() {
+            s.push_str("\\noindent {\\it\\theauthor}\\par\n");
+        }
+        s.push_str("\\smallskip\n");
+    }
+
+    if let Some(cr) = &book.copyright {
+        s.push_str(&format!("\\noindent {cr}\\par\n"));
+    } else if let (Some(year), Some(author)) = (&book.year, &book.author) {
+        s.push_str(&format!("\\noindent \\char169 \\ {year} {author}\\par\n"));
+    } else if let Some(year) = &book.year {
+        s.push_str(&format!("\\noindent \\char169 \\ {year}\\par\n"));
+    }
+
+    if let Some(isbn) = &book.isbn {
+        s.push_str(&format!("\\noindent ISBN: {isbn}\\par\n"));
+    }
+
+    s.push_str("\\eject\\egroup\n");
+    s
+}
+
 fn build_preamble(
     metadata: Option<&Metadata>,
     hyphenation: &[String],
     style: Option<&str>,
     toc_placement: Option<TocPlacement>,
+    is_book: bool,
 ) -> Result<String, Error> {
     let mut s = String::new();
 
@@ -261,10 +313,11 @@ fn build_preamble(
         }
         if book.title.is_some() || book.author.is_some() {
             s.push_str("\\maketitle\n");
-            // Verso of title page: copyright info at bottom, or blank page.
-            let has_colophon = book.copyright.is_some()
-                || book.year.is_some()
-                || book.isbn.is_some();
+            // Verso of title page (page 2):
+            // - Book style: colophon is deferred to the end (tiráž); emit blank verso.
+            // - Other styles: emit copyright/ISBN here if available, otherwise blank.
+            let has_colophon = !is_book
+                && (book.copyright.is_some() || book.year.is_some() || book.isbn.is_some());
             if has_colophon {
                 s.push_str("\\bgroup\\footline={}\\headline={}\n");
                 s.push_str("\\null\\vfil\n");

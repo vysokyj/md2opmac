@@ -286,10 +286,6 @@ Pokud soubor nelze přečíst, konvertor skončí s chybou (ne tichým fallbacke
 - [ ] **Math** — `$...$` / `$$...$$` — pulldown-cmark doesn't parse it; workaround needed
 - [ ] **Definition lists** — not supported by pulldown-cmark
 
-#### Style `book` — typographic conventions not yet implemented
-
-**Back matter:**
-- [ ] **Colofon at end of book** — tiráž (ISBN, printer, year) as alternative to verso title page
 
 #### Style `book` — implemented ✓
 
