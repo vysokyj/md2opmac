@@ -511,7 +511,9 @@ impl Context {
                 self.col_index = 0;
                 self.row_count = 0;
                 let spec: String = self.col_alignments.iter().map(alignment_char).collect();
-                out.push_str(&format!("\\table{{{spec}}}{{\n"));
+                // \par\medskip ensures vertical spacing before the table.
+                // \noalign{\hrule\smallskip} adds the top rule (three-line / booktabs style).
+                out.push_str(&format!("\\par\\medskip\n\\table{{{spec}}}{{\\noalign{{\\hrule\\smallskip}}\n"));
             }
             Tag::TableHead => {
                 self.in_table_head = true;
@@ -563,7 +565,8 @@ impl Context {
                 self.col_index += 1;
             }
             TagEnd::Table => {
-                out.push_str("}\n\n");
+                // \noalign{\smallskip\hrule} adds the bottom rule; \medskip\par for trailing space.
+                out.push_str("\\noalign{\\smallskip\\hrule}\n}\\par\\medskip\n\n");
             }
             _ => {}
         }
