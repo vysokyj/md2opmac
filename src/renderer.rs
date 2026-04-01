@@ -4,9 +4,44 @@ use std::path::{Path, PathBuf};
 use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd, HeadingLevel, Alignment};
 
 use crate::error::Error;
-use crate::metadata::Metadata;
+use crate::metadata::{Metadata, TocValue};
 use crate::styles;
 use crate::typo;
+
+#[derive(Debug, PartialEq, Clone, Copy)]
+enum TocPlacement { Front, Back }
+
+/// Resolves TOC placement from metadata + style default.
+/// Style "book" defaults to Back; all others default to Front.
+fn resolve_toc(toc: Option<&TocValue>, style_name: Option<&str>) -> Option<TocPlacement> {
+    let style_default = match style_name {
+        Some("book") => TocPlacement::Back,
+        _            => TocPlacement::Front,
+    };
+    match toc {
+        None | Some(TocValue::Bool(false)) => None,
+        Some(TocValue::Bool(true))         => Some(style_default),
+        Some(TocValue::Position(s)) if s == "back"  => Some(TocPlacement::Back),
+        Some(TocValue::Position(_))        => Some(TocPlacement::Front),
+    }
+}
+
+/// Renders the TOC block (heading + \maketoc) with suppressed header/footer.
+fn toc_block(placement: TocPlacement) -> String {
+    let mut s = String::new();
+    if placement == TocPlacement::Front {
+        // Ensure recto page for front TOC.
+        s.push_str("\\ifodd\\pageno\\else\\null\\vfil\\eject\\fi\n");
+    } else {
+        // Back TOC: just start a new page.
+        s.push_str("\\vfil\\supereject\n");
+    }
+    s.push_str("\\bgroup\\footline={}\\headline={}\n");
+    s.push_str("\\centerline{\\typosize[14/17]\\bf Obsah}\\bigskip\n");
+    s.push_str("\\maketoc\n");
+    s.push_str("\\egroup\n");
+    s
+}
 
 pub fn render(
     markdown: &str,
@@ -16,9 +51,22 @@ pub fn render(
     style: Option<&str>,
     base_dir: Option<&Path>,
 ) -> Result<String, Error> {
+    let style_name = style.or_else(|| {
+        metadata
+            .and_then(|m| m.style.as_ref())
+            .and_then(|s| s.name.as_deref())
+    });
+    let toc = metadata
+        .and_then(|m| m.book.as_ref())
+        .and_then(|b| b.toc.as_ref());
+    let toc_placement = resolve_toc(toc, style_name);
+
     let mut out = String::new();
-    out.push_str(&build_preamble(metadata, hyphenation, style)?);
+    out.push_str(&build_preamble(metadata, hyphenation, style, toc_placement)?);
     out.push_str(&render_body(markdown, dpi, base_dir));
+    if toc_placement == Some(TocPlacement::Back) {
+        out.push_str(&toc_block(TocPlacement::Back));
+    }
     out.push_str("\n\\bye\n");
     Ok(out)
 }
@@ -106,6 +154,7 @@ fn build_preamble(
     metadata: Option<&Metadata>,
     hyphenation: &[String],
     style: Option<&str>,
+    toc_placement: Option<TocPlacement>,
 ) -> Result<String, Error> {
     let mut s = String::new();
 
@@ -217,14 +266,8 @@ fn build_preamble(
                 s.push_str("\\bgroup\\footline={}\\headline={}\\null\\vfil\\eject\\egroup\n");
             }
         }
-        if book.toc == Some(true) {
-            // Ensure TOC starts on an odd (recto) page.
-            s.push_str("\\ifodd\\pageno\\else\\null\\vfil\\eject\\fi\n");
-            // TOC page without running header/footer.
-            s.push_str("\\bgroup\\footline={}\\headline={}\n");
-            s.push_str("\\centerline{\\typosize[14/17]\\bf Obsah}\\bigskip\n");
-            s.push_str("\\maketoc\n");
-            s.push_str("\\egroup\n");
+        if toc_placement == Some(TocPlacement::Front) {
+            s.push_str(&toc_block(TocPlacement::Front));
         }
     }
 

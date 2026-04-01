@@ -16,13 +16,22 @@ pub struct Metadata {
     pub style: Option<Style>,
 }
 
+/// Controls whether and where to place the table of contents.
+/// In TOML: `toc = true/false` or `toc = "front"/"back"`.
+#[derive(Debug, Deserialize, PartialEq)]
+#[serde(untagged)]
+pub enum TocValue {
+    Bool(bool),
+    Position(String),
+}
+
 #[derive(Debug, Deserialize)]
 pub struct Book {
     pub title: Option<String>,
     pub author: Option<String>,
     pub year: Option<u32>,
     pub isbn: Option<String>,
-    pub toc: Option<bool>,
+    pub toc: Option<TocValue>,
     pub copyright: Option<String>,
 }
 
