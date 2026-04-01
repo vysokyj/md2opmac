@@ -201,12 +201,23 @@ Pole `copyright` přepíše automaticky generovaný řádek `© rok autor`.
 
 ### Vestavěné styly
 
-| Název | Popis |
-|---|---|
-| `minimal` | A4, výchozí písmo LM, jednoduché zápatí s číslem stránky |
-| `book` | B5, oboustranné okraje, Pagella; nadpisy bez čísel, obsah jen kapitoly (`toc_depth=1`) |
-| `academic` | A4, Termes, širší vnější okraj |
-| `manual` | A4, Heros (bezpatkové), menší verbatim |
+#### `minimal` (výchozí)
+
+Jednoduchý styl pro rychlý převod bez zvláštních požadavků. A4, Latin Modern, číslo stránky v zápatí. Vhodný pro jednostránkové dokumenty, poznámky nebo jako základ pro vlastní styl.
+
+#### `book`
+
+Knižní sazba beletrie nebo prózy. B5, Pagella (Palatino), oboustranné symetrické okraje. Nadpisy jsou bez čísel, obsah se generuje vzadu a obsahuje jen kapitoly (`toc_depth=1`). Kapitoly začínají vždy na liché straně (`openright`). Živá záhlaví: sudá strana — název knihy, lichá strana — název kapitoly. Na konci se vygeneruje tiráž. Vhodný pro romány, povídkové sbírky, monografie.
+
+#### `academic`
+
+Akademické publikace, články, eseje. A4, Termes (Times New Roman), o něco širší vnější okraj pro poznámky nebo vazbu. Vhodný pro seminární práce, výzkumné zprávy, sborníky.
+
+#### `manual`
+
+Technická dokumentace. A4, Heros (Helvetica/sans-serif), verbatim bloky (`\begtt`) mají menší písmo aby se dlouhé příkazy lépe vešly. Vhodný pro uživatelské příručky, API dokumentaci, návody.
+
+---
 
 Výchozí styl pokud není nic uvedeno: `minimal`.
 
