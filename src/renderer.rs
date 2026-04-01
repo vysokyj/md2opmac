@@ -52,23 +52,16 @@ pub fn render(
     base_dir: Option<&Path>,
 ) -> Result<String, Error> {
     // Extract YAML front matter when no external metadata is provided (single-file mode).
+    // yaml_meta_owned must outlive effective_metadata (which may borrow it).
     let yaml_meta_owned: Option<Metadata>;
-    let effective_markdown: &str;
-    let effective_metadata: Option<&Metadata>;
-
-    if metadata.is_none() {
+    let (metadata, markdown) = if metadata.is_none() {
         let (ym, rest) = extract_yaml_front_matter(markdown);
         yaml_meta_owned = ym;
-        effective_markdown = rest;
-        effective_metadata = yaml_meta_owned.as_ref();
+        (yaml_meta_owned.as_ref(), rest)
     } else {
         yaml_meta_owned = None;
-        effective_markdown = markdown;
-        effective_metadata = metadata;
-    }
-
-    let metadata = effective_metadata;
-    let markdown = effective_markdown;
+        (metadata, markdown)
+    };
 
     let style_name = style.or_else(|| {
         metadata
@@ -269,6 +262,10 @@ fn build_preamble(
     // \tsuper / \tsub: text-mode superscript / subscript via math mode with roman font.
     s.push_str("\\def\\tsuper#1{$^{\\rm #1}$}\n");
     s.push_str("\\def\\tsub#1{$_{\\rm #1}$}\n");
+    // Common LaTeX math macros missing from plain TeX / OpTeX.
+    s.push_str("\\def\\frac#1#2{{#1\\over#2}}\n");
+    s.push_str("\\def\\dfrac#1#2{{\\displaystyle{#1\\over#2}}}\n");
+    s.push_str("\\def\\tfrac#1#2{{\\textstyle{#1\\over#2}}}\n");
 
     // Resolve and inject style: CLI --style takes priority over metadata [styl].
     let style_name = style.or_else(|| {
