@@ -257,38 +257,53 @@ Pokud soubor nelze přečíst, konvertor skončí s chybou (ne tichým fallbacke
 ## Implementation plan
 
 ### Done ✓
-- CLI: `--output`, `--hyphenation-dict`, `--dpi`, stdin/stdout
+- CLI: `--output`, `--hyphenation-dict`, `--dpi`, `--style`, stdin/stdout
 - Renderer: headings (H1–H4), paragraphs, bold, italic, inline code, fenced code blocks
 - Renderer: unordered and ordered lists, block quotes, horizontal rule
 - Renderer: links (`\ulink`), images (with `imagesize` measurement), tables (`\crli` header)
+- Renderer: strikethrough `~~text~~` → `\strike{text}` (macro defined in preamble)
+- Renderer: footnotes `[^1]` → `\fnote{text}` (two-pass: pre-scan + render)
+- Renderer: task lists `- [x]` / `- [ ]` → `[{\tt x}]` / `[ ]`
 - Renderer: HTML passthrough discarded
 - Typo: Czech quotes (`\uv{}`), dashes (`~--`), non-breaking spaces, ellipsis (`\dots`)
-- Book directory input: `metadata.toml` + `kapitoly/*.md` in alphabetical order
-- Metadata: title, author, font (`\fontfam`), base size (`\typosize`), margins
+- Typo: Unicode dashes `–`/`—` → `--`/`---`
+- Book directory input: `metadata.toml` + `chapters/*.md` in alphabetical order
+- Metadata: title, author, year, isbn, copyright, toc (front/back/true/false)
+- Metadata: font, base_size, paper, margins, header, footer, paragraph, toc_depth, paths.images
+- Style system: lookup chain `./styles/` → `~/.config/md2optex/styles/` → built-in
+- Built-in styles: `minimal`, `book`, `academic`, `manual`
+- Front matter: title page (`\maketitle`), colophon/verso, TOC with odd-page guarantee
+- Page numbering reset to 1 after front matter
+- `nonum`/`toc_depth`: style `book` → `\nonum` on all headings, `toc_depth=1` (chapters only)
 - Hyphenation dictionary → `\hyphenation{}` block
+- Image path prefix: `paths.images` applied when resolving relative image paths
+- Integration tests: 43 tests in `tests/render.rs`
 
 ### Missing / not yet implemented
 
-#### High priority
-- [x] **Integration tests** — `tests/render.rs` covers headings, inline formatting, code blocks, lists, tables, escaping, all typo transformations
-- [ ] **Style system** — `[styl]` in metadata.toml is parsed but ignored; implement lookup chain:
-  1. `./styles/<name>.tex` (relative to metadata.toml)
-  2. `~/.config/md2optex/styles/<name>.tex`
-  3. Built-in embedded styles: `kniha`, `odborny`, `manual`, `minimal`
-- [x] **Unicode dash passthrough** — `–` (U+2013) and `—` (U+2014) in source text should be
-  converted to `--` / `---` (currently only ` -- ` / ` --- ` ASCII sequences are handled)
+#### Renderer / Typo
+- [ ] **Nested single quotes** — `‚vnitřní'` (U+201A / U+2018) → `\uv{vnitřní}`
+- [ ] **Math** — `$...$` / `$$...$$` — pulldown-cmark doesn't parse it; workaround needed
+- [ ] **Definition lists** — not supported by pulldown-cmark
 
-#### Medium priority
-- [ ] **Nested single quotes** — `‚vnitřní'` (U+201A / U+2018) → `\uv{vnitřní}` for nested quotes
-- [x] **`papir` setting** — paper size from metadata (`a4`/`b5`/`a5`) passed to `\margins`; works standalone without explicit margin values
-- [ ] **`odstavec` setting** — `indent`/`noindent` → `\parindent=0pt` or OpTeX default after headings
-- [ ] **`zahlaví` / `zapati`** — running headers/footers from metadata → `\headline` / `\footline`
-- [ ] **Strikethrough** — `~~text~~` is parsed (ENABLE_STRIKETHROUGH) but silently dropped;
-  map to `\strike{text}` or similar OpTeX macro
+#### Style `book` — typographic conventions not yet implemented
 
-#### Low priority
-- [ ] **Image path resolution** — `cesty.obrazky` prefix not applied to `\inspic` paths
-- [ ] **Task lists** — `- [x] item` is parsed (ENABLE_TASKLISTS) but silently dropped
+**Text composition:**
+- [ ] **`\widowpenalty=10000 \clubpenalty=10000`** — prevent widows/orphans (orphaned lines)
+- [ ] **`\frenchspacing`** — equal spacing after periods (Czech standard, no double space after sentence)
+- [ ] **`\emergencystretch`** — looser line breaking to avoid overfull boxes in narrow columns
+
+**Chapter layout:**
+- [ ] **`\openright`** — every chapter starts on a recto (odd/right) page; blank verso inserted if needed
+- [ ] **Ornament under chapter title** — decorative separator below chapter heading
+
+**Running headers (živá záhlaví):**
+- [ ] **Left page: book title, right page: chapter title** — classic two-sided book convention
+  - OpTeX: `\headline={\ifodd\pageno {\it\the\marks0}\hfil\folio \else \folio\hfil{\it\thetitle}\fi}`
+  - Requires `\mark` to be set per chapter (OpTeX does this via `\_printchap`)
+
+**Back matter:**
+- [ ] **Colofon at end of book** — tiráž (ISBN, printer, year) as alternative to verso title page
 
 ## Workflow
 
