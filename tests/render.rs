@@ -11,7 +11,7 @@ fn normalise(s: &str) -> String {
 }
 
 fn body(md: &str) -> String {
-    normalise(&render_body(md, 96, None))
+    normalise(&render_body(md, 96, None, None))
 }
 
 // ── Headings ────────────────────────────────────────────────────────────────
@@ -133,7 +133,7 @@ fn link() {
 #[test]
 fn image_with_base_dir_uses_absolute_path() {
     let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("examples");
-    let out = md2optex::renderer::render_body("![alt](example.png)", 96, Some(&dir));
+    let out = md2optex::renderer::render_body("![alt](example.png)", 96, Some(&dir), None);
     // Path should be absolute (starts with /)
     assert!(out.contains("/examples/example.png"), "expected absolute path in: {out}");
     // Image is 1024px wide → > 15 cm at 96 DPI → \hsize
@@ -142,8 +142,18 @@ fn image_with_base_dir_uses_absolute_path() {
 
 #[test]
 fn image_without_base_dir_keeps_path() {
-    let out = md2optex::renderer::render_body("![alt](img/photo.png)", 96, None);
+    let out = md2optex::renderer::render_body("![alt](img/photo.png)", 96, None, None);
     assert!(out.contains("\\inspic img/photo.png"), "expected original path in: {out}");
+}
+
+#[test]
+fn image_with_images_dir_resolves_via_images_dir() {
+    let base = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let images_dir = base.join("examples");
+    let out = md2optex::renderer::render_body(
+        "![alt](example.png)", 96, Some(base), Some(&images_dir),
+    );
+    assert!(out.contains("/examples/example.png"), "expected images_dir path in: {out}");
 }
 
 // ── Tables ───────────────────────────────────────────────────────────────────
@@ -158,14 +168,14 @@ fn table_alignment_spec() {
 #[test]
 fn table_header_ends_with_crli() {
     let md = "| A | B |\n|---|---|\n| x | y |";
-    let out = render_body(md, 96, None);
+    let out = render_body(md, 96, None, None);
     assert!(out.contains("\\crli"));
 }
 
 #[test]
 fn table_data_row_ends_with_cr() {
     let md = "| A |\n|---|\n| x |";
-    let out = render_body(md, 96, None);
+    let out = render_body(md, 96, None, None);
     // data row ends with \cr (not \crli)
     assert!(out.contains("x \\cr"));
 }
@@ -277,4 +287,16 @@ fn footnote_reference_replaced() {
 #[test]
 fn strikethrough() {
     assert!(body("~~přeškrtnutý~~").contains(r"\strike{přeškrtnutý}"));
+}
+
+// ── Task lists ───────────────────────────────────────────────────────────────
+
+#[test]
+fn task_list_checked() {
+    assert!(body("- [x] hotovo").contains(r"[{\tt x}]\ "));
+}
+
+#[test]
+fn task_list_unchecked() {
+    assert!(body("- [ ] todo").contains(r"[\ ]\ "));
 }

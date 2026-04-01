@@ -85,8 +85,16 @@ optex dokument.tex
 | `> citace` | `\begcitation` … `\endcitation` |
 | Tabulka (GFM) | `\table{lcr}{…}` |
 | `text[^1]` + `[^1]: pozn.` | `text\fnote{pozn.}` |
+| `- [x] hotovo` | `* [x] hotovo` (zaškrtnutý checkbox) |
+| `- [ ] todo` | `* [ ] todo` (prázdný checkbox) |
 
 ### Obrázky
+
+Pokud je v `[paths]` nastaven klíč `images`, hledá se obrázek nejprve v tomto adresáři. Tím lze v Markdownu psát jen název souboru bez prefixu:
+
+```md
+![Foto](foto.jpg)   # hledá se v images/foto.jpg
+```
 
 Fyzická šířka se vypočítá z pixelových rozměrů a zadaného DPI:
 
@@ -215,6 +223,7 @@ Pokud jsou v `[book]` vyplněna pole `title` a/nebo `author`, vygeneruje se auto
 - Bez čísla stránky
 - Rubová strana (str. 2): copyright + ISBN (nebo prázdná), bez čísla stránky
 - Obsah (pokud `toc` není `false`): garantovaně lichá strana, bez záhlaví/zápatí
+- Číslování stránek se resetuje na 1 na začátku těla dokumentu
 
 ## Slovník dělení slov
 

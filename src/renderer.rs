@@ -63,7 +63,11 @@ pub fn render(
 
     let mut out = String::new();
     out.push_str(&build_preamble(metadata, hyphenation, style, toc_placement)?);
-    out.push_str(&render_body(markdown, dpi, base_dir));
+    let images_dir = metadata
+        .and_then(|m| m.paths.as_ref())
+        .and_then(|p| p.images.as_deref())
+        .and_then(|rel| base_dir.map(|b| b.join(rel)));
+    out.push_str(&render_body(markdown, dpi, base_dir, images_dir.as_deref()));
     if toc_placement == Some(TocPlacement::Back) {
         out.push_str(&toc_block(TocPlacement::Back));
     }
@@ -73,7 +77,7 @@ pub fn render(
 
 /// Renders only the document body (no preamble, no `\bye`).
 /// Used by integration tests to check markup in isolation.
-pub fn render_body(markdown: &str, dpi: u32, base_dir: Option<&Path>) -> String {
+pub fn render_body(markdown: &str, dpi: u32, base_dir: Option<&Path>, images_dir: Option<&Path>) -> String {
     let opts = Options::ENABLE_TABLES
         | Options::ENABLE_STRIKETHROUGH
         | Options::ENABLE_TASKLISTS
@@ -81,7 +85,7 @@ pub fn render_body(markdown: &str, dpi: u32, base_dir: Option<&Path>) -> String 
 
     let footnotes = collect_footnotes(markdown, opts);
     let parser = Parser::new_ext(markdown, opts);
-    let mut ctx = Context::new(dpi, base_dir, footnotes);
+    let mut ctx = Context::new(dpi, base_dir, images_dir, footnotes);
     let mut out = String::new();
 
     for event in parser {
@@ -269,6 +273,11 @@ fn build_preamble(
         if toc_placement == Some(TocPlacement::Front) {
             s.push_str(&toc_block(TocPlacement::Front));
         }
+        // Reset page counter to 1 so body text starts at page 1,
+        // regardless of how many front-matter pages preceded it.
+        if book.title.is_some() || book.author.is_some() {
+            s.push_str("\\pageno=1\n");
+        }
     }
 
     s.push('\n');
@@ -299,6 +308,7 @@ fn tex_escape(s: &str) -> String {
 struct Context {
     dpi: u32,
     base_dir: Option<PathBuf>,
+    images_dir: Option<PathBuf>,
     footnotes: HashMap<String, String>,
     list_depth: u32,
     in_code_block: bool,
@@ -311,10 +321,11 @@ struct Context {
 }
 
 impl Context {
-    fn new(dpi: u32, base_dir: Option<&Path>, footnotes: HashMap<String, String>) -> Self {
+    fn new(dpi: u32, base_dir: Option<&Path>, images_dir: Option<&Path>, footnotes: HashMap<String, String>) -> Self {
         Self {
             dpi,
             base_dir: base_dir.map(|p| p.to_path_buf()),
+            images_dir: images_dir.map(|p| p.to_path_buf()),
             footnotes,
             list_depth: 0,
             in_code_block: false,
@@ -327,16 +338,22 @@ impl Context {
         }
     }
 
-    /// Resolves an image path relative to `base_dir`.
+    /// Resolves an image path: tries images_dir first, then base_dir.
     /// Returns an absolute path when possible, otherwise the path as-is.
     fn resolve_image_path(&self, path: &str) -> PathBuf {
         let p = Path::new(path);
         if p.is_absolute() {
             return p.to_path_buf();
         }
+        // Prefer images_dir / path when it exists.
+        if let Some(img_dir) = &self.images_dir {
+            let candidate = img_dir.join(p);
+            if candidate.exists() {
+                return std::fs::canonicalize(&candidate).unwrap_or(candidate);
+            }
+        }
         if let Some(base) = &self.base_dir {
             let joined = base.join(p);
-            // Canonicalize to get a clean absolute path; fall back to joined if it fails.
             return std::fs::canonicalize(&joined).unwrap_or(joined);
         }
         p.to_path_buf()
@@ -371,6 +388,9 @@ impl Context {
                 let body = self.footnotes.get(label.as_ref()).cloned()
                     .unwrap_or_else(|| format!("?{label}"));
                 out.push_str(&format!("\\fnote{{{body}}}"));
+            }
+            Event::TaskListMarker(checked) => {
+                out.push_str(if checked { "[{\\tt x}]\\ " } else { "[\\ ]\\ " });
             }
             Event::SoftBreak => out.push('\n'),
             Event::HardBreak => out.push_str("\\hfil\\break\n"),

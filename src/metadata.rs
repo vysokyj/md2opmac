@@ -1,5 +1,3 @@
-#![allow(dead_code)] // many fields are parsed but not yet rendered — reserved for future use
-
 use std::fs;
 use std::path::{Path, PathBuf};
 
