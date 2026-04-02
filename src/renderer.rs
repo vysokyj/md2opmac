@@ -84,7 +84,7 @@ pub fn render(
     let is_book = style_name == Some("book");
 
     let mut out = String::new();
-    out.push_str(&build_preamble(metadata, hyphenation, style, toc_placement, is_book)?);
+    out.push_str(&build_preamble(metadata, hyphenation, style, toc_placement, is_book, base_dir)?);
     let images_dir = metadata
         .and_then(|m| m.paths.as_ref())
         .and_then(|p| p.images.as_deref())
@@ -124,6 +124,8 @@ fn render_body_impl(markdown: &str, dpi: u32, base_dir: Option<&Path>, images_di
         | Options::ENABLE_SUBSCRIPT
         | Options::ENABLE_DEFINITION_LIST;
 
+    let preprocessed = preprocess_image_attrs(markdown);
+    let markdown = preprocessed.as_str();
     let footnotes = collect_footnotes(markdown, opts);
     let parser = Parser::new_ext(markdown, opts);
     let mut ctx = Context::new(dpi, base_dir, images_dir, nonum, toc_depth, captions, footnotes);
@@ -245,6 +247,7 @@ fn build_preamble(
     style: Option<&str>,
     toc_placement: Option<TocPlacement>,
     is_book: bool,
+    base_dir: Option<&Path>,
 ) -> Result<String, Error> {
     let mut s = String::new();
 
@@ -274,7 +277,7 @@ fn build_preamble(
             .and_then(|st| st.name.as_deref())
     });
     if let Some(name) = style_name {
-        match styles::resolve(name, None) {
+        match styles::resolve(name, base_dir) {
             Some(content) => s.push_str(&content),
             None => eprintln!("md2optex: warning: style '{name}' not found, using defaults"),
         }
@@ -419,6 +422,10 @@ struct Context {
     row_count: usize,
     /// True while inside a raw TeX code block (lang `tex`, `=tex`, `optex`).
     in_raw_tex: bool,
+    /// True while inside a `praxe` callout block.
+    in_callout: bool,
+    /// Buffered text content of the current callout block.
+    callout_buf: String,
     /// Set after a table ends (captions mode only); cleared by the next paragraph start.
     after_table: bool,
     /// True while buffering a potential table-caption paragraph.
@@ -427,6 +434,10 @@ struct Context {
     caption_start: usize,
     /// Raw text collected in the current caption paragraph (for prefix detection).
     caption_text: String,
+    /// Resolved image path waiting for end_tag (deferred output).
+    image_pending_path: Option<PathBuf>,
+    /// Measured image width waiting for end_tag (deferred output).
+    image_pending_width: Option<String>,
 }
 
 impl Context {
@@ -449,10 +460,14 @@ impl Context {
             col_index: 0,
             row_count: 0,
             in_raw_tex: false,
+            in_callout: false,
+            callout_buf: String::new(),
             after_table: false,
             caption_para: false,
             caption_start: 0,
             caption_text: String::new(),
+            image_pending_path: None,
+            image_pending_width: None,
         }
     }
 
@@ -491,6 +506,10 @@ impl Context {
             Event::Text(t)    => {
                 if self.in_image {
                     self.image_alt.push_str(&t);
+                } else if self.in_callout {
+                    let escaped = tex_escape(&t);
+                    let processed = typo::apply(&escaped);
+                    self.callout_buf.push_str(&processed);
                 } else if self.in_raw_tex || self.in_code_block {
                     out.push_str(&t);
                 } else {
@@ -555,6 +574,12 @@ impl Context {
             {
                 self.in_raw_tex = true;
             }
+            Tag::CodeBlock(CodeBlockKind::Fenced(ref lang))
+                if lang.trim() == "praxe" =>
+            {
+                self.in_callout = true;
+                self.callout_buf.clear();
+            }
             Tag::CodeBlock(_) => {
                 self.in_code_block = true;
                 out.push_str("\\begtt\n");
@@ -577,7 +602,8 @@ impl Context {
                 self.image_alt.clear();
                 let resolved = self.resolve_image_path(&dest_url);
                 let width = measure_image(&resolved, self.dpi);
-                out.push_str(&format!("\\picw={width} \\inspic {}\n", resolved.display()));
+                self.image_pending_path = Some(resolved);
+                self.image_pending_width = Some(width);
             }
             Tag::Table(alignments) => {
                 self.col_alignments = alignments;
@@ -586,7 +612,9 @@ impl Context {
                 let n = self.col_alignments.len().max(1);
                 // Use p{dim} columns so cell text wraps instead of overflowing.
                 // Each column gets an equal share of \hsize; \dimexpr is evaluated at TeX time.
-                let col = format!("p{{\\dimexpr\\hsize/{n}\\relax}}");
+                // OpTeX adds \enspace (0.5em) before and after each column via \tabiteml/\tabitemr,
+                // so total overhead is n*1em. Subtract 1em per column to avoid Overfull \hbox.
+                let col = format!("p{{\\dimexpr(\\hsize - {n}em)/{n}\\relax}}");
                 let spec: String = std::iter::repeat(col).take(n).collect::<Vec<_>>().join(" ");
                 // \par\medskip ensures vertical spacing before the table.
                 // \noalign{\hrule\smallskip} adds the top rule (three-line / booktabs style).
@@ -646,6 +674,14 @@ impl Context {
             TagEnd::CodeBlock => {
                 if self.in_raw_tex {
                     self.in_raw_tex = false;
+                } else if self.in_callout {
+                    self.in_callout = false;
+                    let body = std::mem::take(&mut self.callout_buf);
+                    // Attach \fnote inline to the preceding paragraph by stripping
+                    // the trailing blank line that TagEnd::Paragraph already emitted.
+                    let trimmed = out.trim_end_matches('\n').len();
+                    out.truncate(trimmed);
+                    out.push_str(&format!("\\fnote{{{}}}\n\n", body.trim()));
                 } else {
                     self.in_code_block = false;
                     out.push_str("\\endtt\n\n");
@@ -669,11 +705,29 @@ impl Context {
             TagEnd::DefinitionList => out.push_str("\\par\\medskip\n\n"),
             TagEnd::Image => {
                 self.in_image = false;
-                if self.captions && !self.image_alt.is_empty() {
-                    let alt = std::mem::take(&mut self.image_alt);
-                    out.push_str(&format!("\\caption/f {alt}\n"));
-                } else {
-                    self.image_alt.clear();
+                let raw_alt = std::mem::take(&mut self.image_alt);
+                let (alt, attrs) = split_image_alt(&raw_alt);
+                let is_fullpage = attrs.split_whitespace()
+                    .any(|a| a == ".fullpage" || a == "fullpage");
+                if let (Some(path), Some(width)) = (
+                    self.image_pending_path.take(),
+                    self.image_pending_width.take(),
+                ) {
+                    if is_fullpage {
+                        out.push_str(&format!(
+                            "\\par\n\
+                             \\bgroup\\footline={{}}\\headline={{}}\n\
+                             \\vbox to\\vsize{{\\vfil\\picw=\\hsize \\inspic {} \\vfil}}\n\
+                             \\egroup\n\
+                             \\eject\n",
+                            path.display()
+                        ));
+                    } else {
+                        out.push_str(&format!("\\picw={width} \\inspic {}\n", path.display()));
+                        if self.captions && !alt.is_empty() {
+                            out.push_str(&format!("\\caption/f {alt}\n"));
+                        }
+                    }
                 }
             }
             TagEnd::TableHead => {
@@ -745,6 +799,99 @@ fn extract_yaml_front_matter(markdown: &str) -> (Option<Metadata>, &str) {
     } else {
         (None, markdown)
     }
+}
+
+/// Splits raw alt text into `(display_alt, attrs_str)`.
+/// The `\x0E` sentinel is inserted by `preprocess_image_attrs` to encode Pandoc-style
+/// image attributes `{...}` into the alt text before pulldown-cmark parsing.
+fn split_image_alt(raw: &str) -> (&str, &str) {
+    match raw.find('\x0E') {
+        Some(pos) => (&raw[..pos], &raw[pos + '\x0E'.len_utf8()..]),
+        None => (raw, ""),
+    }
+}
+
+/// Pre-processes Pandoc-style image attribute syntax before pulldown-cmark parsing.
+///
+/// Transforms `![alt](url){attrs}` → `![alt\x0Eattrs](url)`, encoding the attribute
+/// block into the alt text via an `\x0E` (ASCII SO) sentinel. pulldown-cmark does not
+/// parse image attributes, so they must be extracted at this stage.
+fn preprocess_image_attrs(input: &str) -> String {
+    let mut out = String::with_capacity(input.len());
+    let chars: Vec<char> = input.chars().collect();
+    let mut i = 0;
+    while i < chars.len() {
+        if chars[i] == '!' && chars.get(i + 1) == Some(&'[') {
+            if let Some((consumed, replacement)) = try_parse_image_with_attrs(&chars, i) {
+                out.push_str(&replacement);
+                i += consumed;
+                continue;
+            }
+        }
+        out.push(chars[i]);
+        i += 1;
+    }
+    out
+}
+
+/// Attempts to parse `![alt](url){attrs}` at `start` (position of `!`).
+/// Returns `(chars_consumed, replacement_text)` on success, `None` otherwise.
+fn try_parse_image_with_attrs(chars: &[char], start: usize) -> Option<(usize, String)> {
+    let mut i = start + 2; // skip "!["
+
+    // Collect alt text up to matching ']'
+    let alt_start = i;
+    let mut depth = 1usize;
+    while i < chars.len() {
+        match chars[i] {
+            '\\' => i += 1,
+            '[' => depth += 1,
+            ']' => { depth -= 1; if depth == 0 { break; } }
+            _ => {}
+        }
+        i += 1;
+    }
+    if chars.get(i) != Some(&']') { return None; }
+    let alt: String = chars[alt_start..i].iter().collect();
+    i += 1; // skip ']'
+
+    // Must have '('
+    if chars.get(i) != Some(&'(') { return None; }
+    i += 1; // skip '('
+
+    // Collect URL up to matching ')'
+    let url_start = i;
+    let mut depth = 1usize;
+    while i < chars.len() {
+        match chars[i] {
+            '\\' => i += 1,
+            '(' => depth += 1,
+            ')' => { depth -= 1; if depth == 0 { break; } }
+            _ => {}
+        }
+        i += 1;
+    }
+    if chars.get(i) != Some(&')') { return None; }
+    let url: String = chars[url_start..i].iter().collect();
+    i += 1; // skip ')'
+
+    // Check for '{' immediately after ')'
+    if chars.get(i) != Some(&'{') { return None; }
+    i += 1; // skip '{'
+
+    // Collect attrs up to '}'
+    let attrs_start = i;
+    while i < chars.len() && chars[i] != '}' {
+        i += 1;
+    }
+    if chars.get(i) != Some(&'}') { return None; }
+    let attrs: String = chars[attrs_start..i].iter().collect();
+    let attrs = attrs.trim().to_string();
+    i += 1; // skip '}'
+
+    if attrs.is_empty() { return None; }
+
+    Some((i - start, format!("![{}\x0E{}]({})", alt, attrs, url)))
 }
 
 fn measure_image(path: &Path, dpi: u32) -> String {
