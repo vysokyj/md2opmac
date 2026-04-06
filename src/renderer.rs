@@ -277,6 +277,15 @@ fn build_preamble(
     s.push_str("\\def\\dfrac#1#2{{\\displaystyle{#1\\over#2}}}\n");
     s.push_str("\\def\\tfrac#1#2{{\\textstyle{#1\\over#2}}}\n");
 
+    // \ornsep: ornamental separator for horizontal rules.
+    s.push_str("\\def\\ornsep{\\bigskip\\centerline{*\\enspace*\\enspace*}\\bigskip}\n");
+    // \centimage{width}{path}: centred image.
+    s.push_str("\\def\\centimage#1#2{\\medskip\\centerline{\\pdfximage width#1{#2}\\pdfrefximage\\pdflastximage}\\medskip}\n");
+    // \chapterimage{width}{path}: full-width image for chapter openers.
+    s.push_str("\\def\\chapterimage#1#2{\\centerline{\\pdfximage width#1{#2}\\pdfrefximage\\pdflastximage}\\medskip}\n");
+    // \IC{X}{rest}: drop cap (initial capital) — first letter enlarged, rest of text follows.
+    s.push_str("\\def\\IC#1#2{{\\font\\ICfont=\\fontname\\tenrm\\space at 2.5em\\relax\\leavevmode\\hbox{\\ICfont #1}\\kern-.05em}#2}\n");
+
     // Resolve and inject style: CLI --style takes priority over metadata [styl].
     let style_name = style.or_else(|| {
         metadata
