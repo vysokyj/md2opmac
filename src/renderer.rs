@@ -1236,35 +1236,6 @@ fn build_halign_spec(
     format!("\\tabskip=0pt plus1fil{}", parts.join("&\n  "))
 }
 
-/// Parses `colwidths="20% 50% 30%"` from an attribute string.
-/// Returns a vector of fractions (e.g. [0.20, 0.50, 0.30]).
-fn parse_colwidths(attrs: &str) -> Option<Vec<f64>> {
-    // Find colwidths="..." in the attribute string
-    let key = "colwidths=";
-    let start = attrs.find(key)?;
-    let rest = &attrs[start + key.len()..];
-    // Accept both quoted and unquoted values
-    let (value, _) = if let Some(stripped) = rest.strip_prefix('"') {
-        let end = stripped.find('"')?;
-        (&stripped[..end], &stripped[end + 1..])
-    } else {
-        let end = rest.find([' ', '}']).unwrap_or(rest.len());
-        (&rest[..end], &rest[end..])
-    };
-    let widths: Vec<f64> = value
-        .split_whitespace()
-        .filter_map(|s| {
-            let s = s.trim_end_matches('%');
-            s.parse::<f64>().ok().map(|v| v / 100.0)
-        })
-        .collect();
-    if widths.is_empty() {
-        None
-    } else {
-        Some(widths)
-    }
-}
-
 /// Checks if a line is a GFM table separator row (e.g. `|:---|---:|:---:|`).
 fn is_separator_row(line: &str) -> bool {
     let trimmed = line.trim();
@@ -1330,24 +1301,15 @@ fn preprocess_table_attrs(input: &str) -> (String, Vec<TableAttrs>) {
         // Detect attribute block `{...}` on a line by itself after a table
         if trimmed.starts_with('{') && trimmed.ends_with('}') {
             let inner = trimmed[1..trimmed.len() - 1].trim();
-            let has_table_attr = inner.split_whitespace().any(|a| a == ".longtable")
-                || inner.contains("colwidths=");
-            if has_table_attr {
+            if inner.split_whitespace().any(|a| a == ".longtable") {
                 // Check if this follows a table (look backward for last non-empty line being a table row)
                 let prev_non_empty = lines[..i].iter().rev().find(|l| !l.trim().is_empty());
                 if let Some(prev) = prev_non_empty
                     && (prev.trim().starts_with('|') || prev.trim().ends_with('|'))
                 {
-                    // Apply attributes to the last table
                     if let Some(last) = attrs_list.last_mut() {
-                        if inner.split_whitespace().any(|a| a == ".longtable") {
-                            last.longtable = true;
-                        }
-                        if let Some(widths) = parse_colwidths(inner) {
-                            last.col_widths = Some(widths);
-                        }
+                        last.longtable = true;
                     }
-                    // Skip this attribute line
                     continue;
                 }
             }
